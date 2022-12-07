@@ -1,0 +1,552 @@
+---
+title: "Análisis factorial por componentes principales en R"
+runningheader: "Análisis factorial por componentes principales en R" # solo para salida en pdf
+subtitle: "Análisis factorial PCA" # solo para salida html
+author: "Josue Huaman"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidar caché cuando cambia la versión de tuft
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+```
+
+::: {.fullwidth}
+# Instalación y carga de librerias
+
+```{r}
+# pacotes <- c("plotly", #plataforma gráfica
+#              "tidyverse", #carregar outros pacotes do R
+#              "ggrepel", #geoms de texto e rótulo para 'ggplot2' que ajudam a
+#              #evitar sobreposição de textos
+#              "knitr", "kableExtra", #formatação de tabelas
+#              "reshape2", #função 'melt'
+#              "PerformanceAnalytics", #função 'chart.Correlation' para plotagem
+#              "psych", #elaboração da fatorial e estatísticas
+#              "ltm", #determinação do alpha de Cronbach pela função 'cronbach.alpha'
+#              "Hmisc", # matriz de correlações com p-valor
+#              "readxl") # importar arquivo Excel
+# 
+# if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+#   instalador <- pacotes[!pacotes %in% installed.packages()]
+#   for(i in 1:length(instalador)) {
+#     install.packages(instalador, dependencies = T)
+#     break()}
+#   sapply(pacotes, require, character = T)
+# } else {
+#   sapply(pacotes, require, character = T)
+# }
+
+```
+:::
+::: {.fullwidth}
+
+```{r}	
+library(ggplot2)
+library(readxl)
+library(plotly)
+library(ggrepel)
+library(knitr)
+library(kableExtra)
+library(reshape2)
+library(PerformanceAnalytics)
+library(psych)
+library(ltm)
+library(Hmisc)
+library(dplyr)
+library(tidyverse)
+
+```
+:::
+::: {.fullwidth}
+
+## Carga de base de datos
+
+```{r}
+NotasFatorial <- read_excel("notas_fatorial.xlsx")
+```
+
+:::
+::: {.fullwidth}
+
+
+Visualización de base de datos
+
+```{r}
+NotasFatorial[1:6, 1:5] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE,
+                font_size = 17)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Estatísticas descritivas
+
+```{r}
+summary(NotasFatorial)
+
+```
+
+Dispersión y ajuste lineal entre las variables 'custos' y 'finanças'
+
+```{r colored by transmission.}
+NotasFatorial %>%
+  ggplot() +
+  geom_point(aes(x = finanças, y = custos),
+             color = "darkorchid",
+             size = 3) +
+  geom_smooth(aes(x = finanças, y = custos),
+              color = "orange", 
+              method = "lm", 
+              formula = y ~ x, 
+              se = FALSE,
+              size = 1.3) +
+  labs(x = "Finanças",
+       y = "Custos") +
+  theme_bw()
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Dispersión y ajuste lineal entre variables 'custos' y 'marketing'
+
+```{r}
+
+NotasFatorial %>%
+  ggplot() +
+  geom_point(aes(x = marketing, y = custos),
+             color = "darkorchid",
+             size = 3) +
+  geom_smooth(aes(x = marketing, y = custos),
+              color = "orange", 
+              method = "lm", 
+              formula = y ~ x, 
+              se = FALSE,
+              size = 1.3) +
+  labs(x = "Marketing",
+       y = "Custos") +
+  theme_bw()
+```
+
+:::
+::: {.fullwidth}
+
+
+Dispersión y ajuste lineal entre variables 'custos' y 'atuária'
+
+```{r}
+NotasFatorial %>%
+  ggplot() +
+  geom_point(aes(x = atuária, y = custos),
+             color = "darkorchid",
+             size = 3) +
+  geom_smooth(aes(x = atuária, y = custos),
+              color = "orange", 
+              method = "lm", 
+              formula = y ~ x, 
+              se = FALSE,
+              size = 1.3) +
+  labs(x = "Atuária",
+       y = "Custos") +
+  theme_bw()
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Coeficientes de correlación de Pearson para cada par de variables
+
+```{r}
+rho <- rcorr(as.matrix(NotasFatorial[,2:5]), type="pearson")
+
+corr_coef <- rho$r # Matriz de correlación
+corr_sig <- round(rho$P, 5) # Matriz con p-valor de coeficientes
+
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Elaboración de un mapa de calor de las correlaciones de Pearson entre las variables
+
+
+```{r}
+ggplotly(
+  NotasFatorial[,2:5] %>%
+    cor() %>%
+    melt() %>%
+    rename(Correlação = value) %>%
+    ggplot() +
+    geom_tile(aes(x = Var1, y = Var2, fill = Correlação)) +
+    geom_text(aes(x = Var1, y = Var2, label = format(Correlação, digits = 1)),
+              size = 5) +
+    scale_fill_viridis_b() +
+    labs(x = NULL, y = NULL) +
+    theme_bw())
+
+```
+
+
+:::
+::: {.fullwidth}
+
+
+
+
+Visualización de distribuciones variables, dispersiones, valores de correlación.
+
+```{r}
+chart.Correlation(NotasFatorial[, 2:5], histogram = TRUE, pch = "+")
+```
+
+:::
+::: {.fullwidth}
+
+
+
+# Elaboración de Análisis Factorial por Componentes Principales
+
+Prueba de esfericidad de Bartlett
+
+```{r}
+cortest.bartlett(NotasFatorial[, 2:5])
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Elaboración de análisis factorial por componentes principales
+
+```{r}
+fatorial <- principal(NotasFatorial[, 2:5],
+                      nfactors = length(NotasFatorial[, 2:5]),
+                      rotate = "none",
+                      scores = TRUE)
+fatorial
+```
+
+
+:::
+::: {.fullwidth}
+
+
+
+Valores propios
+
+```{r}
+eigenvalues <- round(fatorial$values, 5)
+eigenvalues
+```
+
+
+:::
+::: {.fullwidth}
+
+
+## Suma de valores propios = 4 (número de variables en el análisis)
+
+También representa la cantidad máxima de factores posibles en el análisis.
+
+```{r}
+round(sum(eigenvalues), 2)
+```
+
+Identificación de la varianza compartida en cada factor
+
+:::
+::: {.fullwidth}
+
+
+
+```{r}
+variancia_compartilhada <- as.data.frame(fatorial$Vaccounted) %>% 
+  slice(1:3)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+```{r}
+rownames(variancia_compartilhada) <- c("Autovalores",
+                                       "Prop. da Variância",
+                                       "Prop. da Variância Acumulada")
+
+```
+
+
+:::
+::: {.fullwidth}
+
+
+
+Varianza compartida por las variables originales para la formación de cada factor
+```{r}
+round(variancia_compartilhada, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE, 
+                font_size = 17)
+
+```
+
+:::
+::: {.fullwidth}
+
+
+Cálculo de puntajes factoriales
+
+```{r}
+scores_fatoriais <- as.data.frame(fatorial$weights)
+
+```
+
+:::
+::: {.fullwidth}
+
+
+Visualización de puntajes factoriales
+
+```{r}
+round(scores_fatoriais, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE, 
+                font_size = 17)
+```
+
+
+
+:::
+::: {.fullwidth}
+
+
+Cálculo de los propios factores
+```{r}
+fatores <- as.data.frame(fatorial$scores)
+
+View(fatores)
+
+```
+
+
+:::
+::: {.fullwidth}
+
+
+Coeficientes de correlación de Pearson para cada par de factores (ortogonal)
+```{r}
+rho <- rcorr(as.matrix(fatores), type="pearson")
+round(rho$r, 4)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Cálculo de cargas factoriales
+
+```{r}
+cargas_fatoriais <- as.data.frame(unclass(fatorial$loadings))
+```
+
+:::
+::: {.fullwidth}
+
+
+
+
+Visualización de cargas factoriales
+```{r}
+round(cargas_fatoriais, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE, 
+                font_size = 17)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Cálculo de puntos en común
+
+```{r}
+comunalidades <- as.data.frame(unclass(fatorial$communality)) %>%
+  rename(comunalidades = 1)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+## Visualización de puntos en común (aquí son iguales a 1 para todas las variables)
+
+4 factores fueron extraídos en este primer momento
+
+```{r}
+round(comunalidades, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 17)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+# Elaboración del análisis factorial por componentes principales
+
+Factores extraídos de valores propios mayores que 1
+
+Definición del número de factores con autovalores mayores a 1
+
+```{r}
+k <- sum(eigenvalues > 1)
+print(k)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Elaboración de análisis factorial por componentes principales
+
+Con 'k' número de factores con valores propios mayores que 1
+
+```{r}
+fatorial2 <- principal(NotasFatorial[, 2:5],
+                      nfactors = k,
+                      rotate = "none",
+                      scores = TRUE)
+fatorial2
+```
+
+:::
+::: {.fullwidth}
+
+
+
+
+Cálculo de puntos en común con solo los primeros factores 'k' ('k' = 2)
+```{r}
+comunalidades2 <- as.data.frame(unclass(fatorial2$communality)) %>%
+  rename(comunalidades = 1)
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Visualización de puntos en común con solo los primeros factores 'k' ('k' = 2)
+
+```{r}
+
+round(comunalidades2, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 17)
+```
+
+
+:::
+::: {.fullwidth}
+
+
+Diagrama de carga con las cargas de los primeros factores 'k' ('k' = 2)
+
+```{r}
+
+cargas_fatoriais[, 1:2] %>% 
+  data.frame() %>%
+  rownames_to_column("variáveis") %>%
+  ggplot(aes(x = PC1, y = PC2, label = variáveis)) +
+  geom_point(color = "darkorchid",
+             size = 3) +
+  geom_text_repel() +
+  geom_vline(aes(xintercept = 0), linetype = "dashed", color = "orange") +
+  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "orange") +
+  expand_limits(x= c(-1.25, 0.25), y=c(-0.25, 1)) +
+  theme_bw()
+```
+
+:::
+::: {.fullwidth}
+
+
+
+Agregar los factores extraídos a la base de datos original
+
+```{r}
+NotasFatorial <- bind_cols(NotasFatorial,
+                           "fator 1" = fatores$PC1, 
+                           "fator 2" = fatores$PC2)
+
+```
+
+
+:::
+::: {.fullwidth}
+
+
+Creación de un ranking Criterio de suma ponderada y ranking)
+```{r}
+NotasFatorial$ranking <- fatores$PC1 * variancia_compartilhada$PC1[2] +
+                         fatores$PC2 * variancia_compartilhada$PC2[2]
+```
+
+:::
+::: {.fullwidth}
+
+
+
+
+# Visualización de la clasificación final
+
+```{r}
+NotasFatorial[1:6, 1:8] %>%
+  arrange(desc(ranking)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 17)
+```
+
+:::
+
+
